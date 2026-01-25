@@ -1,7 +1,9 @@
 import streamlit as st
+import plotly.express as px
 
 from classification import Classification
 from doc_gathering.collector import collect
+from sklearn.metrics import classification_report
 
 st.set_page_config(page_title="Document Classification", layout="wide")
 st.title("Classification by category")
@@ -16,3 +18,75 @@ except:
     if load_docs:
         collect()
     st.stop()
+
+pipeline, test_acc, cm, df_results, X_train, y_train = classification.train_model(docs)
+tab1, tab2, tab3 = st.tabs(["Classify New Doc", "Model Performance", "Predictions"])
+
+with tab1:
+    st.header("Classify Document")
+    queryCol, buttonCol = st.columns([15, 1], gap=None)
+
+    with queryCol:
+        new_document = st.text_input(
+            "Enter query:",
+            placeholder="Eg. 'Top business ...' or 'Latest celebrity gossip ...'",
+            label_visibility="collapsed",
+        )
+
+    with buttonCol:
+        search_clicked = st.button("🔍")
+
+    if new_document or (new_document and search_clicked):
+        pred, confidence, probs = classification.predict_category(
+            new_document.strip(), pipeline
+        )
+        st.success(f"**Predicted: {pred.title()}** (Confidence: {confidence:.1%})")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Business", f"{probs[0]:.1%}")
+        col2.metric("Entertainment", f"{probs[1]:.1%}")
+        col3.metric("Health", f"{probs[2]:.1%}")
+
+        # Test cases
+        tests = {
+            "Business": "UK economy grows amid rate cuts.",
+            "Entertainment": "Oscars 2026 best film nominees.",
+            "Health": "NHS launches new flu vaccine campaign.",
+            "Short": "celebrity gossip",
+            "Mixed": "Movie box office boosts economy",
+        }
+        st.subheader("✅ Test Cases")
+        for name, test in tests.items():
+            p, c, _ = classification.predict_category(test, pipeline)
+            st.caption(f"**{name}** → {p.title()} ({c:.0%})")
+
+with tab2:
+    st.header("Model Performance")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric("Test Accuracy", f"{test_acc:.1%}")
+        st.subheader("Confusion Matrix")
+        fig_cm = px.imshow(
+            cm,
+            x=["Business", "Entertainment", "Health"],
+            y=["Business", "Entertainment", "Health"],
+            color_continuous_scale="Blues",
+            title="Predictions vs True",
+        )
+        st.plotly_chart(fig_cm)
+
+    with col2:
+        st.subheader("Classification Report")
+        report = classification_report(
+            y_train,
+            pipeline.predict(X_train),
+            target_names=["business", "entertainment", "health"],
+            output_dict=True,
+        )
+        st.json({k: f"{v:.3f}" for k, v in report.items() if isinstance(v, float)})
+
+with tab3:
+    st.header("All predictions")
+    st.dataframe(df_results, use_container_width=True, hide_index=True)
+
+st.markdown("---")
