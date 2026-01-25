@@ -52,12 +52,13 @@ class Classification:
 
         balanced = []
         for category_docs_list in category_docs.values():
-            balanced.extend(category_docs_list[:40])
+            balanced.extend(category_docs_list[:60])
 
         categories = pd.Series([d["category"] for d in balanced]).value_counts()
         st.sidebar.write("Dataset:", categories.to_dict())
         return balanced
 
+    @st.cache_data
     def train_model(_self, docs):
         texts = [_self.preprocess(d["text"]) for d in docs]
         labels = [doc["category"] for doc in docs]

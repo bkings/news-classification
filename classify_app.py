@@ -46,18 +46,21 @@ with tab1:
         col2.metric("Entertainment", f"{probs[1]:.1%}")
         col3.metric("Health", f"{probs[2]:.1%}")
 
-        # Test cases
-        tests = {
-            "Business": "UK economy grows amid rate cuts.",
-            "Entertainment": "Oscars 2026 best film nominees.",
-            "Health": "NHS launches new flu vaccine campaign.",
-            "Short": "celebrity gossip",
-            "Mixed": "Movie box office boosts economy",
-        }
-        st.subheader("✅ Test Cases")
-        for name, test in tests.items():
-            p, c, _ = classification.predict_category(test, pipeline)
-            st.caption(f"**{name}** → {p.title()} ({c:.0%})")
+    st.markdown("---")
+    # Test cases
+    tests = {
+        "Business": "UK economy grows amid rate cuts.",
+        "Entertainment": "Oscars 2026 best film nominees.",
+        "Health": "NHS launches new flu vaccine campaign.",
+        "Short": "Kim Kardashian gossip",
+        "Long": "Jennifer lawrence speaking in favour of Donald Trump so that she can get work in films soon",
+        "Mixed": "Movie box office boosts economy",
+        "With stop words": "a common food preservative that can risk organs and feels more heavy when consumed",
+    }
+    st.subheader("✅ Test Cases")
+    for name, test in tests.items():
+        p, c, _ = classification.predict_category(test, pipeline)
+        st.caption(f"**[{name}]** {test} → {p.title()} ({c:.1%})")
 
 with tab2:
     st.header("Model Performance")
