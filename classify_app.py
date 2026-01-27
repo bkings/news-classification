@@ -1,8 +1,12 @@
 import streamlit as st
 import plotly.express as px
+import time
 
 from classification import Classification
 from doc_gathering.collector import collect
+from feedback import Feedback
+
+from pathlib import Path
 from sklearn.metrics import classification_report
 
 st.set_page_config(page_title="Document Classification", layout="wide")
@@ -19,7 +23,7 @@ except:
         collect()
     st.stop()
 
-pipeline, test_acc, cm, df_results, X_train, y_train = classification.train_model(docs)
+pipeline, test_acc, cm, df_results, X_train, y_train = classification.load_model(docs)
 tab1, tab2, tab3 = st.tabs(["Classify New Doc", "Model Performance", "Predictions"])
 
 with tab1:
@@ -41,6 +45,44 @@ with tab1:
             new_document.strip(), pipeline
         )
         st.success(f"**Predicted: {pred.title()}** (Confidence: {confidence:.1%})")
+
+        # Feedback buttons
+        colA, colB = st.columns(2)
+        feedback = Feedback()
+
+        if "correct_clicked" not in st.session_state:
+            st.session_state.correct_clicked = False
+
+        if "wrong_clicked" not in st.session_state:
+            st.session_state.wrong_clicked = False
+
+        if colA.button("✔ Correct", key="correct"):
+            st.session_state.correct_clicked = True
+
+        if st.session_state.correct_clicked:
+            feedback.save_feedback(new_document, pred)
+            st.success("Saved to dataset!")
+            time.sleep(1.2)
+            st.session_state.correct_clicked = False
+            st.rerun()
+
+        if colB.button("⤫ Wrong", key="wrong"):
+            st.session_state.wrong_clicked = True
+
+        if st.session_state.wrong_clicked:
+            st.error("Thank you for your feedback! Manual correction required.")
+            true_category = st.selectbox(
+                "Correct category: ",
+                ["business", "entertainment", "health"],
+                key="selected_category",
+            )
+            if st.button("Save correction"):
+                feedback.save_feedback(new_document, true_category)
+                st.success("Corrected and saved!")
+                time.sleep(1.2)
+                st.session_state.wrong_clicked = False
+                st.rerun()
+
         col1, col2, col3 = st.columns(3)
         col1.metric("Business", f"{probs[0]:.1%}")
         col2.metric("Entertainment", f"{probs[1]:.1%}")
@@ -90,6 +132,12 @@ with tab2:
 
 with tab3:
     st.header("All predictions")
-    st.dataframe(df_results, use_container_width=True, hide_index=True)
+    st.dataframe(df_results, width="stretch", hide_index=True)
 
+if st.sidebar.button("🔄 Retrain with feedback (5s)"):
+    with st.sidebar.spinner("Re-training with updated data ..."):
+        time.sleep(2)
+        state = classification.retrain_with_feedback(docs)
+        st.sidebar.success(f"Re-trained! New Accuracy: {state['test_acc']:.1%}")
+        st.rerun()
 st.markdown("---")

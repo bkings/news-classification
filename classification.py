@@ -4,7 +4,9 @@ import json
 import streamlit as st
 import pandas as pd
 import numpy as np
+import pickle
 
+from datetime import datetime
 from collections import defaultdict
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
@@ -13,11 +15,15 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, confusion_matrix
+from pathlib import Path
 
 from doc_gathering.collector import JSON_FILE
+from feedback import Feedback
 
 
 class Classification:
+
+    MODEL_FILE = Path("data/nb_model.pkl")
 
     nltk.download("stopwords", quiet=True)
     STOP_WORDS = set(stopwords.words("english"))
@@ -35,6 +41,24 @@ class Classification:
             if t not in Classification.STOP_WORDS and len(t) > 2
         ]
         return " ".join(tokens)
+
+    # @st.cache_resource
+    def load_model(_self, docs):
+        """Load or train new"""
+        if Classification.MODEL_FILE.exists():
+            with open(Classification.MODEL_FILE, "rb") as f:
+                state = pickle.load(f)
+                pipeline = state["pipeline"]
+                test_acc = state["test_acc"]
+                cm = state["cm"]
+                df_results = state["df_results"]
+                X_train = state["X_train"]
+                Y_train = state["Y_train"]
+                st.sidebar.success("Using improved model with feedback!")
+            return pipeline, test_acc, cm, df_results, X_train, Y_train
+
+        st.sidebar.info("Training baseline model")
+        return _self.train_model(docs)
 
     @st.cache_data
     def load_and_balance_docs(_self):
@@ -58,7 +82,7 @@ class Classification:
         st.sidebar.write("Dataset:", categories.to_dict())
         return balanced
 
-    @st.cache_data
+    # @st.cache_data
     def train_model(_self, docs):
         texts = [_self.preprocess(d["text"]) for d in docs]
         labels = [doc["category"] for doc in docs]
@@ -98,12 +122,34 @@ class Classification:
         )
 
         return pipeline, accuracy, cm, df_results, X_train, Y_train
-    
-    def predict_category(self, query: str, pipeline:Pipeline):
+
+    def predict_category(self, query: str, pipeline: Pipeline):
         processedQuery = self.preprocess(query)
         pred = pipeline.predict([processedQuery])[0]
         probs = pipeline.predict_proba([processedQuery])[0]
         confidence = np.max(probs)
         return pred, confidence, probs
 
+    def retrain_with_feedback(self, docs):
+        feedback = Feedback()
+        fb = feedback.load_feedback()
 
+        all_docs = docs + [{"text": f["query"], "category": f["category"]} for f in fb]
+        pipeline, acc, cm, df_results, X_train, Y_train = self.train_model(all_docs)
+
+        # Save COMPLETE state
+        state = {
+            "pipeline": pipeline,
+            "test_acc": acc,
+            "cm": cm,
+            "df_results": df_results,
+            "X_train": X_train,
+            "Y_train": Y_train,
+            "feedback_count": len(fb),
+            "train_date": datetime.now().isoformat(),
+        }
+
+        with open(Classification.MODEL_FILE, "wb") as f:
+            pickle.dump(state, f)
+
+        return state
