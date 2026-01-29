@@ -1,13 +1,11 @@
 import streamlit as st
 import plotly.express as px
+import pandas as pd
 import time
 
 from classification import Classification
 from doc_gathering.collector import collect
 from feedback import Feedback
-
-from pathlib import Path
-from sklearn.metrics import classification_report
 
 st.set_page_config(page_title="Document Classification", layout="wide")
 st.title("Classification by category")
@@ -23,7 +21,9 @@ except:
         collect()
     st.stop()
 
-pipeline, test_acc, cm, df_results, X_train, y_train = classification.load_model(docs)
+pipeline, test_acc, cm, df_results, X_train, y_train, report = (
+    classification.load_model(docs)
+)
 tab1, tab2, tab3 = st.tabs(["Classify New Doc", "Model Performance", "Predictions"])
 
 with tab1:
@@ -109,26 +109,27 @@ with tab2:
     col1, col2 = st.columns(2)
 
     with col1:
+        labels = ["Business", "Entertainment", "Health"]
         st.metric("Test Accuracy", f"{test_acc:.1%}")
         st.subheader("Confusion Matrix")
         fig_cm = px.imshow(
             cm,
-            x=["Business", "Entertainment", "Health"],
-            y=["Business", "Entertainment", "Health"],
+            x=labels,
+            y=labels,
+            text_auto=True,
             color_continuous_scale="Blues",
-            title="Predictions vs True",
+            labels=dict(x="Predicted", y="Actual", color="Count"),
+            title="Predictions vs Actual",
         )
+        fig_cm.update_layout(xaxis_title="Predicted Class", yaxis_title="Actual Class")
         st.plotly_chart(fig_cm)
 
     with col2:
         st.subheader("Classification Report")
-        report = classification_report(
-            y_train,
-            pipeline.predict(X_train),
-            target_names=["business", "entertainment", "health"],
-            output_dict=True,
+        metrics_df = classification.safe_classification_metrics(
+            report, ["business", "entertainment", "health"]
         )
-        st.json({k: f"{v:.3f}" for k, v in report.items() if isinstance(v, float)})
+        st.dataframe(metrics_df)
 
 with tab3:
     st.header("All predictions")

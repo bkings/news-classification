@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from pathlib import Path
 
 from doc_gathering.collector import JSON_FILE
@@ -54,8 +54,9 @@ class Classification:
                 df_results = state["df_results"]
                 X_train = state["X_train"]
                 Y_train = state["Y_train"]
+                report = state["report"]
                 st.sidebar.success("Using improved model with feedback!")
-            return pipeline, test_acc, cm, df_results, X_train, Y_train
+            return pipeline, test_acc, cm, df_results, X_train, Y_train, report
 
         st.sidebar.info("Training baseline model")
         return _self.train_model(docs)
@@ -108,6 +109,13 @@ class Classification:
         Y_pred = pipeline.predict(X_test)
         accuracy = accuracy_score(Y_test, Y_pred)
 
+        report = classification_report(
+            Y_test,
+            Y_pred,
+            target_names=["business", "entertainment", "health"],
+            output_dict=True,
+        )
+
         # Confusion matrix
         cm = confusion_matrix(
             Y_test, Y_pred, labels=["business", "entertainment", "health"]
@@ -121,7 +129,7 @@ class Classification:
             }
         )
 
-        return pipeline, accuracy, cm, df_results, X_train, Y_train
+        return pipeline, accuracy, cm, df_results, X_train, Y_train, report
 
     def predict_category(self, query: str, pipeline: Pipeline):
         processedQuery = self.preprocess(query)
@@ -135,7 +143,9 @@ class Classification:
         fb = feedback.load_feedback()
 
         all_docs = docs + [{"text": f["query"], "category": f["category"]} for f in fb]
-        pipeline, acc, cm, df_results, X_train, Y_train = self.train_model(all_docs)
+        pipeline, acc, cm, df_results, X_train, Y_train, report = self.train_model(
+            all_docs
+        )
 
         # Save COMPLETE state
         state = {
@@ -145,6 +155,7 @@ class Classification:
             "df_results": df_results,
             "X_train": X_train,
             "Y_train": Y_train,
+            "report": report,
             "feedback_count": len(fb),
             "train_date": datetime.now().isoformat(),
         }
@@ -153,3 +164,36 @@ class Classification:
             pickle.dump(state, f)
 
         return state
+
+    def safe_classification_metrics(_self, report, class_names):
+        """Handle string keys safely."""
+        metrics = []
+
+        # Per-class metrics
+        for i, class_name in enumerate(class_names):
+            if class_name in report:
+                row = report[class_name]
+                metrics.append(
+                    {
+                        "Category": class_name.title(),
+                        "Precision": row["precision"],
+                        "Recall": row["recall"],
+                        "F1": row["f1-score"],
+                        "Support": int(row["support"]),
+                    }
+                )
+
+        # Averages
+        for avg_type in ["macro avg", "weighted avg"]:
+            row = report[avg_type]
+            metrics.append(
+                {
+                    "Category": avg_type.replace(" avg", "").title(),
+                    "Precision": row["precision"],
+                    "Recall": row["recall"],
+                    "F1": row["f1-score"],
+                    "Support": int(row["support"]),
+                }
+            )
+
+        return pd.DataFrame(metrics).round(3)
