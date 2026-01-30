@@ -79,7 +79,7 @@ with tab1:
             if st.button("Save correction"):
                 feedback.save_feedback(new_document, true_category)
                 st.success("Corrected and saved!")
-                time.sleep(1.2)
+                time.sleep(1.5)
                 st.session_state.wrong_clicked = False
                 st.rerun()
 
@@ -95,7 +95,7 @@ with tab1:
         "Entertainment": "Oscars 2026 best film nominees.",
         "Health": "NHS launches new flu vaccine campaign.",
         "Short": "Kim Kardashian gossip",
-        "Long": "Jennifer lawrence speaking in favour of Donald Trump so that she can get work in films soon",
+        "Long": "Sydney Sweeney speaking in favour of Trump so that she can get to work more in hollywood",
         "Mixed": "Movie box office boosts economy",
         "With stop words": "a common food preservative that can risk organs and feels more heavy when consumed",
     }
